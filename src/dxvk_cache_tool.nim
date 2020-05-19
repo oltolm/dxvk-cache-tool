@@ -1,11 +1,11 @@
-# This is just an example to get you started. A typical binary package
-# uses this file as the main entry point of the application.
-
 import os
+import sha1
+import streams
 import strutils
 import tables
-import streams
-import sha1
+import parseopt
+
+const Version = "0.0.1"
 
 const HashSize = 20
 
@@ -21,12 +21,12 @@ type EntryHeader = object
   stageMask: uint8
   entrySize: uint32
 
-type Entry = object
+type Entry = ref object
   header: EntryHeader
   hash: array[0..HashSize-1, uint8]
   data: seq[uint8]
 
-proc isValid(entry: ref Entry): bool =
+proc isValid(entry: Entry): bool =
   return sha1.compute(entry.data) == entry.hash
 
 type Header = object
@@ -39,7 +39,7 @@ proc newConfig(): Config =
 
 proc readHeader(fs: FileStream): Header =
   var header: Header
-  fs.read(header.magic)
+  read(fs, header.magic)
   header.version = fs.readUint32
   header.entrySize = fs.readUint32
   return header
@@ -47,61 +47,63 @@ proc readHeader(fs: FileStream): Header =
 proc readUint24(a: array[0..2, uint8]): uint32 =
   return uint32(a[0]) + uint32(a[1]) shl 8 + uint32(a[2]) shl 16
 
-proc readEntry(fs: FileStream): ref Entry =
+proc writeUint24(fs: FileStream, n: uint32) =
+  var p: array[0..2, uint8]
+  p[0] = uint8(n)
+  p[1] = uint8(n shr 8)
+  p[2] = uint8(n shr 16)
+  write(fs, p)
+
+proc readEntry(fs: FileStream): Entry =
   var header: EntryHeader
   header.stageMask = fs.readUint8
   var entrySize: array[0..2, uint8]
-  fs.read(entrySize)
+  read(fs, entrySize)
   header.entrySize = readUint24(entrySize)
-  var entry = new(Entry)
-  entry.header = header
-  fs.read(entry.hash)
+  var entry = Entry(header: header)
+  read(fs, entry.hash)
   newSeq(entry.data, header.entrySize)
-  discard fs.readData(entry.data[0].addr, entry.data.len)
+  discard readData(fs, entry.data[0].addr, entry.data.len)
   return entry
 
 proc writeHeader(fs: FileStream, header: Header) =
-  fs.write(header.magic)
-  fs.write(header.version)
-  fs.write(header.entrySize)
+  write(fs, header.magic)
+  write(fs, header.version)
+  write(fs, header.entrySize)
 
-proc writeEntry(fs: FileStream, entry: ref Entry) =
-  fs.write(entry.header.stageMask)
-  fs.write(entry.header.entrySize) # TODO: write 3 bytes!
-  fs.write(entry.hash)
-  fs.write(entry.data)
+proc writeEntry(fs: FileStream, entry: Entry) =
+  write(fs, entry.header.stageMask)
+  writeUint24(fs, entry.header.entrySize)
+  write(fs, entry.hash)
+  writeData(fs, entry.data[0].addr, entry.data.len)
 
-proc main(): int =
-  if os.commandLineParams().len == 0:
-    raiseAssert("need at least one file")
+proc main(output: string, files: seq[string]): int =
   var config = newConfig()
-  for file in os.commandLineParams():
+  if (output != ""): config.output = output
+  for file in files:
     config.files.add(file)
   write(stderr, "Merging files");
   for path in config.files:
     write(stdout, format(" $#", path));
   writeLine(stdout, "");
 
-  var entries = newTable[string, ref Entry]()
+  var entries = newTable[string, Entry]()
 
-  for i,path in config.files:
+  for i, path in config.files:
     var (_, _, ext) = splitFile(path)
-    if ext != ".dxvk-cache":
-      raiseAssert("File extension mismatch: expected .dxvk-cache")
+    doAssert(ext == ".dxvk-cache", "File extension mismatch: expected .dxvk-cache")
   
     var fs = openFileStream(path)
-    defer: fs.close
+    defer: close(fs)
 
     var header = readHeader(fs)
-    if header.magic != MagicString:
-      raiseAssert("Magic string mismatch")
+    doAssert(header.magic == MagicString, "Magic string mismatch")
     if config.version == 0:
       config.version = header.version
       config.entrySize = header.entrySize
-      stdout.writeLine(format("Detected state cache version $#", header.version))
-      if header.version != 8:
-        raiseAssert("only version 8 is supported, exiting")
-    stdout.writeLine(format("Merging $# ($#/$#)...", path, i+1, config.files.len))
+      writeLine(stdout, format("Detected state cache version $#", header.version))
+      doAssert(header.version == 8, "only version 8 is supported, exiting")
+    writeLine(stdout, format("Merging $# ($#/$#)...", path, i+1, config.files.len))
     var omitted = 0
     var entriesLen = entries.len
     while true:
@@ -110,28 +112,63 @@ proc main(): int =
         entries[entry.hash.toHex] = entry
       else:
         omitted.inc
-      if fs.atEnd:
+      if atEnd(fs):
         break
 
-    stdout.writeLine(format("$# new entries", entries.len - entriesLen))
+    writeLine(stdout, format("$# new entries", entries.len - entriesLen))
     if omitted > 0:
-      stdout.writeLine(format("$# entries are omitted as invalid", omitted))
+      writeLine(stdout, format("$# entries are omitted as invalid", omitted))
 
-  if entries.len == 0:
-    raiseAssert("No valid state cache entries found")
+  doAssert(entries.len != 0, "No valid state cache entries found")
   
-  var fs = openFileStream(config.output)
-  defer: fs.close
-  stdout.writeLine(format("Writing $# entries to file $#", entries.len,
+  var fs = openFileStream(config.output, fmWrite)
+  defer: close(fs)
+  writeLine(stdout, format("Writing $# entries to file $#", entries.len,
    config.output))
   var header = Header(magic: MagicString, version: config.version, entrySize: config.entrySize)
   writeHeader(fs, header)
   for entry in entries.values:
     writeEntry(fs, entry)
-  stdout.writeLine("Finished")
+  writeLine(stdout, "Finished")
+
+let doc = """
+dxvk_cache_tool [OPTIONS] <FILE>...
+
+OPTIONS:    
+        -oFILE, --output FILE   Set output file name
+        -h, --help              Display help and exit
+        -V, --version           Output version information and exit
+"""
+
+proc writeVersion() =
+  writeLine(stdout, format("dxvk_cache_tool $#", Version))
+  quit(0)
+
+proc writeHelp() =
+  writeLine(stdout, doc)
+  quit(0)
 
 when isMainModule:
   try:
-    discard main()
+    var output: string
+    var files: seq[string] = @[]
+    var p = initOptParser(shortNoVal = {'h', 'V'}, longNoVal = @["help", "version"])
+    for kind, key, val in p.getopt():
+      case kind
+      of cmdArgument:
+        files.add(key)
+      of cmdEnd: assert(false)
+      of cmdLongOption, cmdShortOption:
+        case key
+        of "help", "h":
+          writeHelp()
+        of "version", "V":
+          writeVersion()
+        of "output", "o":
+          output = val
+    if (files.len == 0):
+      writeHelp()
+    discard main(output, files)
   except:
-    stderr.writeLine(format("error, exiting: $#", getCurrentExceptionMsg()))
+    writeLine(stderr, format("error, exiting: $#", getCurrentExceptionMsg()))
+    quit(1)
