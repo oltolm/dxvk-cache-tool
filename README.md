@@ -27,5 +27,5 @@ Finished
 
 ```
 nimble install
-.\dxvk-cache-tool
+.\dxvk_cache_tool
 ```
