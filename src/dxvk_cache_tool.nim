@@ -63,7 +63,9 @@ proc readEntry(fs: FileStream): Entry =
   var entry = Entry(header: header)
   read(fs, entry.hash)
   newSeq(entry.data, header.entrySize)
-  discard readData(fs, entry.data[0].addr, entry.data.len)
+  let n = readData(fs, entry.data[0].addr, entry.data.len)
+  if (n != entry.data.len):
+    writeLine(stderr, format("reading entry data, expected: $#, actual: $#", entry.data.len, n))
   return entry
 
 proc writeHeader(fs: FileStream, header: Header) =
@@ -108,10 +110,10 @@ proc main(output: string, files: seq[string]): int =
     var entriesLen = entries.len
     while true:
       var entry = readEntry(fs)
-      if entry.isValid:
+      if entry.isValid():
         entries[entry.hash.toHex] = entry
       else:
-        omitted.inc
+        omitted.inc()
         writeLine(stderr, format("size: $#, expected: $#, actual: $#", entry.header.entrySize, entry.hash.toHex, sha1.compute(entry.data).toHex))
       if atEnd(fs):
         break
