@@ -44,7 +44,9 @@ proc readHeader(fs: FileStream): Header =
   header.entrySize = fs.readUint32
   return header
 
-proc readUint24(a: array[0..2, uint8]): uint32 =
+proc readUint24(fs: FileStream): uint32 =
+  var a: array[0..2, uint8]
+  read(fs, a)
   return uint32(a[0]) + uint32(a[1]) shl 8 + uint32(a[2]) shl 16
 
 proc writeUint24(fs: FileStream, n: uint32) =
@@ -57,9 +59,7 @@ proc writeUint24(fs: FileStream, n: uint32) =
 proc readEntry(fs: FileStream): Entry =
   var header: EntryHeader
   header.stageMask = fs.readUint8
-  var entrySize: array[0..2, uint8]
-  read(fs, entrySize)
-  header.entrySize = readUint24(entrySize)
+  header.entrySize = fs.readUint24
   var entry = Entry(header: header)
   read(fs, entry.hash)
   newSeq(entry.data, header.entrySize)
