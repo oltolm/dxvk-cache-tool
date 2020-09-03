@@ -170,5 +170,5 @@ when isMainModule:
       writeHelp()
     discard main(output, files)
   except:
-    writeLine(stderr, format("error, exiting: $#", getCurrentExceptionMsg()))
+    writeLine(stderr, format("Error. Exiting: $#", getCurrentExceptionMsg()))
     quit(1)
