@@ -114,7 +114,7 @@ proc main(output: string, files: seq[string]): int =
         entries[entry.hash.toHex] = entry
       else:
         omitted.inc()
-        writeLine(stderr, format("size: $#, expected: $#, actual: $#", entry.header.entrySize, entry.hash.toHex, sha1.compute(entry.data).toHex))
+        writeLine(stderr, format("expected: $#, actual: $#", entry.hash.toHex, sha1.compute(entry.data).toHex))
       if atEnd(fs):
         break
 
