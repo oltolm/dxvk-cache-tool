@@ -5,7 +5,7 @@ import strutils
 import tables
 import parseopt
 
-const Version = "0.0.2"
+const Version = "0.2.0"
 
 const HashSize = 20
 
@@ -102,7 +102,7 @@ proc main(output: string, files: seq[string]): int =
       config.version = header.version
       config.entrySize = header.entrySize
       writeLine(stdout, format("Detected state cache version $#", header.version))
-      doAssert(header.version == 8, "only version 8 is supported, exiting")
+      doAssert(header.version == 8 or header.version == 9, "versions 8 and 9 are supported, exiting")
     writeLine(stdout, format("Merging $# ($#/$#)...", path, i+1, config.files.len))
     var omitted = 0
     var entriesLen = entries.len
