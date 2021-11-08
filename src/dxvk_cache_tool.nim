@@ -92,7 +92,7 @@ proc main(output: string, files: seq[string]): int =
   for i, path in config.files:
     var (_, _, ext) = splitFile(path)
     doAssert(ext == ".dxvk-cache", "File extension mismatch: expected .dxvk-cache")
-  
+
     var fs = openFileStream(path)
     defer: close(fs)
 
@@ -120,7 +120,7 @@ proc main(output: string, files: seq[string]): int =
       writeLine(stdout, format("$# entries are omitted as invalid", omitted))
 
   doAssert(entries.len != 0, "No valid state cache entries found")
-  
+
   var fs = openFileStream(config.output, fmWrite)
   defer: close(fs)
   writeLine(stdout, format("Writing $# entries to file $#", entries.len,
