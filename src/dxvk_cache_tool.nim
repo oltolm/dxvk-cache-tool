@@ -102,7 +102,7 @@ proc main(output: string, files: seq[string]): int =
       config.version = header.version
       config.entrySize = header.entrySize
       writeLine(stdout, format("Detected state cache version $#", header.version))
-      doAssert(header.version == 8 or header.version == 9 or header.version == 10, "only versions 8-10 are supported, exiting")
+      doAssert(header.version >= 8 and header.version <= 15, "only versions 8-15 are supported, exiting")
     writeLine(stdout, format("Merging $# ($#/$#)...", path, i+1, config.files.len))
     var omitted = 0
     var entriesLen = entries.len
