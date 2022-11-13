@@ -5,7 +5,7 @@ import strutils
 import tables
 import parseopt
 
-const Version = "0.3.0"
+const Version = "0.4.0"
 
 const HashSize = 20
 

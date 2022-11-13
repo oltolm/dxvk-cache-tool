@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.3.0"
+version       = "0.4.0"
 author        = "oltolm"
 description   = "Tool for merging dxvk-cache files"
 license       = "MIT"
